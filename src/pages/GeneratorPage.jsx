@@ -13,6 +13,7 @@ const GeneratorPage = () => {
     description: "",
     notes: "",
   });
+  const [generationMode, setGenerationMode] = useState("pdf"); // "pdf" or "content"
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -28,11 +29,21 @@ const GeneratorPage = () => {
       ...formData,
       generatedAt: new Date().toISOString(),
       id: Date.now(),
+      generationMode: generationMode,
     };
 
     try {
       localStorage.setItem("currentPDF", JSON.stringify(pdfData));
-      showToast("PDF generated successfully!", "success");
+
+      if (generationMode === "content") {
+        showToast("Generating content and PDF...", "success");
+        // Add your content generation logic here
+        // For example, call an AI API to generate content
+        // Then proceed to download
+      } else {
+        showToast("PDF generated successfully!", "success");
+      }
+
       navigate("download");
     } catch (error) {
       showToast("Failed to generate PDF", "error");
@@ -156,13 +167,71 @@ const GeneratorPage = () => {
             </div>
           )}
 
+          {/* Generation Mode Selection */}
+          <div className="pt-8 space-y-4">
+            <label className="block text-sm font-medium text-gray-900 mb-4">
+              Generation Mode
+            </label>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <input
+                  type="radio"
+                  id="pdf-only"
+                  name="generation-mode"
+                  checked={generationMode === "pdf"}
+                  onChange={() => setGenerationMode("pdf")}
+                  className="sr-only peer"
+                />
+                <label
+                  htmlFor="pdf-only"
+                  className="flex items-center justify-center w-full p-6 border-2 border-gray-200 rounded-2xl cursor-pointer transition-all peer-checked:border-black peer-checked:bg-black/5 hover:border-gray-300"
+                >
+                  <div className="text-center">
+                    <div className="text-base font-medium text-gray-900 mb-1">
+                      Generate PDF Only
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Create PDF with provided content
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex-1">
+                <input
+                  type="radio"
+                  id="write-content"
+                  name="generation-mode"
+                  checked={generationMode === "content"}
+                  onChange={() => setGenerationMode("content")}
+                  className="sr-only peer"
+                />
+                <label
+                  htmlFor="write-content"
+                  className="flex items-center justify-center w-full p-6 border-2 border-gray-200 rounded-2xl cursor-pointer transition-all peer-checked:border-black peer-checked:bg-black/5 hover:border-gray-300"
+                >
+                  <div className="text-center">
+                    <div className="text-base font-medium text-gray-900 mb-1">
+                      Write Content & Generate PDF
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      AI generates content then creates PDF
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
           {/* Generate Button */}
           <div className="pt-8">
             <button
               onClick={handleGenerate}
               className="group w-full px-8 py-5 bg-black text-white text-base font-medium rounded-full hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
             >
-              Generate PDF Document
+              {generationMode === "content"
+                ? "Write Content & Generate PDF"
+                : "Generate PDF Document"}
               <ArrowRight
                 size={20}
                 className="group-hover:translate-x-1 transition-transform"
