@@ -1,12 +1,4 @@
-/**
- * API Service
- * Centralized API calls to backend
- *
- * Backend URL: http://localhost:5000
- * All endpoints return: { success: boolean, message: string, data: object }
- */
-
-const API_URL = "http://localhost:5000/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Helper to get auth token from localStorage
 const getToken = () => {
