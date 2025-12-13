@@ -13,6 +13,7 @@ const LoginPage = () => {
     password: "",
   });
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
@@ -33,22 +34,28 @@ const LoginPage = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validateForm()) {
       showToast("Please fix the errors in the form", "error");
       return;
     }
 
-    setTimeout(() => {
-      const userData = {
-        name: formData.email.split("@")[0],
-        email: formData.email,
-      };
+    setIsLoading(true);
 
-      login(userData);
-      showToast("Logged in successfully!", "success");
-      navigate("home");
-    }, 500);
+    try {
+      const result = await login(formData);
+
+      if (result.success) {
+        showToast("Logged in successfully!", "success");
+        navigate("home");
+      } else {
+        showToast(result.error || "Login failed", "error");
+      }
+    } catch (error) {
+      showToast(error.message || "Login failed", "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -75,7 +82,8 @@ const LoginPage = () => {
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400 disabled:opacity-50"
             />
             {errors.email && (
               <p className="text-sm text-red-600 mt-2">{errors.email}</p>
@@ -93,7 +101,8 @@ const LoginPage = () => {
               onChange={(e) =>
                 setFormData({ ...formData, password: e.target.value })
               }
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400 disabled:opacity-50"
             />
             {errors.password && (
               <p className="text-sm text-red-600 mt-2">{errors.password}</p>
@@ -102,13 +111,16 @@ const LoginPage = () => {
 
           <button
             onClick={handleSubmit}
-            className="group w-full px-8 py-5 bg-black text-white text-base font-medium rounded-full hover:bg-gray-800 transition-all flex items-center justify-center gap-2 mt-12"
+            disabled={isLoading}
+            className="group w-full px-8 py-5 bg-black text-white text-base font-medium rounded-full hover:bg-gray-800 transition-all flex items-center justify-center gap-2 mt-12 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Login to Account
-            <ArrowRight
-              size={20}
-              className="group-hover:translate-x-1 transition-transform"
-            />
+            {isLoading ? "Logging in..." : "Login to Account"}
+            {!isLoading && (
+              <ArrowRight
+                size={20}
+                className="group-hover:translate-x-1 transition-transform"
+              />
+            )}
           </button>
 
           <p className="text-center text-gray-600 pt-6">

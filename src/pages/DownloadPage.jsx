@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { Download, Share2, ArrowLeft } from "lucide-react";
+import { Download, Share2, ArrowLeft, Check } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../hooks/useToast";
 import { useRouter } from "../utils/router";
+import { pdfAPI } from "../services/api";
 
 const DownloadPage = () => {
   const { isAuthenticated } = useAuth();
   const { showToast } = useToast();
   const { navigate } = useRouter();
   const [pdfData, setPdfData] = useState(null);
-  const [shareLink] = useState(
-    "https://builder.app/share/" + Math.random().toString(36).substr(2, 9)
-  );
+  const [shareLink, setShareLink] = useState("");
+  const [isLoadingShare, setIsLoadingShare] = useState(false);
+  const [hasShareLink, setHasShareLink] = useState(false);
 
   useEffect(() => {
     const storedPDF = localStorage.getItem("currentPDF");
@@ -23,20 +24,62 @@ const DownloadPage = () => {
     }
   }, []);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!isAuthenticated) {
       showToast("Please login to download your PDF", "error");
       navigate("login");
       return;
     }
 
-    showToast("PDF downloaded successfully!", "success");
-    console.log("Downloading PDF:", pdfData);
+    try {
+      // Get download URL from backend
+      const response = await pdfAPI.getDownloadURL(pdfData.pdfId);
+
+      if (response.success) {
+        // Open download URL in new tab
+        window.open(response.data.downloadUrl, "_blank");
+        showToast("PDF download started!", "success");
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      showToast(error.message || "Failed to download PDF", "error");
+    }
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(shareLink);
-    showToast("Share link copied to clipboard!", "success");
+  const handleCreateShareLink = async () => {
+    if (!isAuthenticated) {
+      showToast("Please login to create share links", "error");
+      navigate("login");
+      return;
+    }
+
+    setIsLoadingShare(true);
+
+    try {
+      const response = await pdfAPI.createShareLink(pdfData.pdfId, {
+        expiresInDays: 30,
+      });
+
+      if (response.success) {
+        setShareLink(response.data.shareUrl);
+        setHasShareLink(true);
+        showToast("Share link created!", "success");
+      }
+    } catch (error) {
+      console.error("Share link error:", error);
+      showToast(error.message || "Failed to create share link", "error");
+    } finally {
+      setIsLoadingShare(false);
+    }
+  };
+
+  const handleCopyShareLink = () => {
+    if (shareLink) {
+      navigator.clipboard.writeText(shareLink);
+      showToast("Share link copied to clipboard!", "success");
+    } else {
+      handleCreateShareLink();
+    }
   };
 
   if (!pdfData) {
@@ -56,24 +99,17 @@ const DownloadPage = () => {
         {/* Success Message */}
         <div className="text-center mb-16">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-900 rounded-full mb-8">
-            <svg
-              className="w-10 h-10 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
+            <Check className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-6xl font-semibold text-gray-900 mb-4">All Set</h1>
           <p className="text-xl text-gray-500 font-light">
             Your document is ready to download
           </p>
+          {pdfData.aiGenerated && (
+            <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm text-gray-700">
+              ✨ Content generated with AI
+            </div>
+          )}
         </div>
 
         {/* PDF Preview */}
@@ -82,15 +118,12 @@ const DownloadPage = () => {
             <div className="text-3xl font-semibold text-gray-900">
               {pdfData.title}
             </div>
-            <div className="text-lg text-gray-600">
-              Created by {pdfData.name}
+            <div className="text-sm text-gray-500">PDF ID: {pdfData.pdfId}</div>
+            <div className="text-sm text-gray-500">
+              Size: {(pdfData.size / 1024).toFixed(2)} KB
             </div>
             <div className="text-sm text-gray-500">
-              {new Date(pdfData.generatedAt).toLocaleDateString("en-US", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}
+              Status: {pdfData.status}
             </div>
           </div>
         </div>
@@ -107,11 +140,16 @@ const DownloadPage = () => {
           </button>
 
           <button
-            onClick={handleShare}
-            className="w-full px-8 py-5 bg-white text-gray-900 text-base font-medium rounded-full border-2 border-gray-200 hover:border-gray-900 transition-colors flex items-center justify-center gap-2"
+            onClick={handleCopyShareLink}
+            disabled={!isAuthenticated || isLoadingShare}
+            className="w-full px-8 py-5 bg-white text-gray-900 text-base font-medium rounded-full border-2 border-gray-200 hover:border-gray-900 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <Share2 size={20} />
-            Copy Share Link
+            {isLoadingShare
+              ? "Creating Share Link..."
+              : hasShareLink
+              ? "Copy Share Link"
+              : "Create Share Link"}
           </button>
         </div>
 
@@ -122,7 +160,8 @@ const DownloadPage = () => {
               Login Required
             </h3>
             <p className="text-gray-600 mb-4">
-              Create a free account to download your PDF document
+              Create a free account to download your PDF document and create
+              share links
             </p>
             <button
               onClick={() => navigate("login")}
@@ -133,29 +172,45 @@ const DownloadPage = () => {
           </div>
         )}
 
-        {/* Share Link */}
-        <div className="border-t border-gray-200 pt-12">
-          <label className="block text-sm font-medium text-gray-900 mb-4">
-            Shareable Link
-          </label>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={shareLink}
-              readOnly
-              className="flex-1 px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600"
-            />
-            <button
-              onClick={handleShare}
-              className="px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors"
-            >
-              Copy
-            </button>
+        {/* Share Link Display */}
+        {shareLink && (
+          <div className="border-t border-gray-200 pt-12">
+            <label className="block text-sm font-medium text-gray-900 mb-4">
+              Shareable Link
+            </label>
+            <div className="flex gap-3">
+              <input
+                type="text"
+                value={shareLink}
+                readOnly
+                className="flex-1 px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl text-sm text-gray-600"
+              />
+              <button
+                onClick={handleCopyShareLink}
+                className="px-6 py-3 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              Anyone with this link can download your PDF (expires in 30 days)
+            </p>
           </div>
-          <p className="text-xs text-gray-500 mt-3">
-            Anyone with this link can view your PDF
-          </p>
-        </div>
+        )}
+
+        {/* Direct View Link */}
+        {isAuthenticated && pdfData.fileUrl && (
+          <div className="mt-8">
+            <a
+              href={pdfData.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              View PDF in browser →
+            </a>
+          </div>
+        )}
 
         {/* Back Button */}
         <div className="mt-12 text-center">

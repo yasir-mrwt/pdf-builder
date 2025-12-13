@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { useToast } from "../hooks/useToast";
 import { useRouter } from "../utils/router";
+import { pdfAPI } from "../services/api";
 
 const GeneratorPage = () => {
   const { showToast } = useToast();
@@ -13,40 +14,48 @@ const GeneratorPage = () => {
     description: "",
     notes: "",
   });
-  const [generationMode, setGenerationMode] = useState("pdf"); // "pdf" or "content"
+  const [useAI, setUseAI] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!formData.title || !formData.name) {
-      showToast("Please fill in all required fields", "error");
+      showToast("Please fill in title and name", "error");
       return;
     }
 
-    const pdfData = {
-      ...formData,
-      generatedAt: new Date().toISOString(),
-      id: Date.now(),
-      generationMode: generationMode,
-    };
+    setIsLoading(true);
 
     try {
-      localStorage.setItem("currentPDF", JSON.stringify(pdfData));
+      // Call backend API
+      const response = await pdfAPI.generate({
+        ...formData,
+        useLLM: useAI,
+      });
 
-      if (generationMode === "content") {
-        showToast("Generating content and PDF...", "success");
-        // Add your content generation logic here
-        // For example, call an AI API to generate content
-        // Then proceed to download
+      if (response.success) {
+        // Store PDF data for download page
+        localStorage.setItem("currentPDF", JSON.stringify(response.data));
+
+        showToast(
+          useAI
+            ? "AI content generated and PDF created!"
+            : "PDF generated successfully!",
+          "success"
+        );
+
+        navigate("download");
       } else {
-        showToast("PDF generated successfully!", "success");
+        showToast("PDF generation failed", "error");
       }
-
-      navigate("download");
     } catch (error) {
-      showToast("Failed to generate PDF", "error");
+      console.error("Generation error:", error);
+      showToast(error.message || "Failed to generate PDF", "error");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -73,7 +82,8 @@ const GeneratorPage = () => {
               placeholder="Enter document title"
               value={formData.title}
               onChange={(e) => handleChange("title", e.target.value)}
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400 disabled:opacity-50"
             />
           </div>
 
@@ -87,7 +97,8 @@ const GeneratorPage = () => {
               placeholder="Enter your full name"
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400 disabled:opacity-50"
             />
           </div>
 
@@ -101,20 +112,26 @@ const GeneratorPage = () => {
               placeholder="your@email.com"
               value={formData.email}
               onChange={(e) => handleChange("email", e.target.value)}
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors bg-transparent placeholder:text-gray-400 disabled:opacity-50"
             />
           </div>
 
           {/* Description */}
           <div className="space-y-3">
             <label className="block text-sm font-medium text-gray-900">
-              Description
+              Description {useAI && "(AI will enhance this)"}
             </label>
             <textarea
-              placeholder="Enter a detailed description..."
+              placeholder={
+                useAI
+                  ? "Describe what you want the AI to write about..."
+                  : "Enter a detailed description..."
+              }
               value={formData.description}
               onChange={(e) => handleChange("description", e.target.value)}
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors resize-none bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors resize-none bg-transparent placeholder:text-gray-400 disabled:opacity-50"
               rows="3"
             />
           </div>
@@ -128,9 +145,51 @@ const GeneratorPage = () => {
               placeholder="Any additional information..."
               value={formData.notes}
               onChange={(e) => handleChange("notes", e.target.value)}
-              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors resize-none bg-transparent placeholder:text-gray-400"
+              disabled={isLoading}
+              className="w-full px-0 py-4 border-b-2 border-gray-200 focus:border-gray-900 outline-none text-lg transition-colors resize-none bg-transparent placeholder:text-gray-400 disabled:opacity-50"
               rows="2"
             />
+          </div>
+
+          {/* AI Toggle */}
+          <div className="pt-8 pb-4">
+            <button
+              onClick={() => setUseAI(!useAI)}
+              disabled={isLoading}
+              className={`w-full p-6 border-2 rounded-2xl transition-all ${
+                useAI
+                  ? "border-black bg-black/5"
+                  : "border-gray-200 hover:border-gray-300"
+              } disabled:opacity-50`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Sparkles
+                    className={useAI ? "text-black" : "text-gray-400"}
+                    size={24}
+                  />
+                  <div className="text-left">
+                    <div className="text-base font-medium text-gray-900">
+                      Use AI Content Generation
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Let AI write professional content for your PDF
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    useAI ? "bg-black" : "bg-gray-300"
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 bg-white rounded-full transition-transform transform ${
+                      useAI ? "translate-x-6" : "translate-x-0.5"
+                    } mt-0.5`}
+                  />
+                </div>
+              </div>
+            </button>
           </div>
 
           {/* Preview */}
@@ -155,87 +214,36 @@ const GeneratorPage = () => {
                 )}
                 {formData.description && (
                   <div className="text-base text-gray-700 leading-relaxed mt-8">
-                    {formData.description}
-                  </div>
-                )}
-                {formData.notes && (
-                  <div className="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-200">
-                    {formData.notes}
+                    {useAI
+                      ? "(AI will generate enhanced content based on this)"
+                      : formData.description}
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* Generation Mode Selection */}
-          <div className="pt-8 space-y-4">
-            <label className="block text-sm font-medium text-gray-900 mb-4">
-              Generation Mode
-            </label>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <input
-                  type="radio"
-                  id="pdf-only"
-                  name="generation-mode"
-                  checked={generationMode === "pdf"}
-                  onChange={() => setGenerationMode("pdf")}
-                  className="sr-only peer"
-                />
-                <label
-                  htmlFor="pdf-only"
-                  className="flex items-center justify-center w-full p-6 border-2 border-gray-200 rounded-2xl cursor-pointer transition-all peer-checked:border-black peer-checked:bg-black/5 hover:border-gray-300"
-                >
-                  <div className="text-center">
-                    <div className="text-base font-medium text-gray-900 mb-1">
-                      Generate PDF Only
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      Create PDF with provided content
-                    </div>
-                  </div>
-                </label>
-              </div>
-
-              <div className="flex-1">
-                <input
-                  type="radio"
-                  id="write-content"
-                  name="generation-mode"
-                  checked={generationMode === "content"}
-                  onChange={() => setGenerationMode("content")}
-                  className="sr-only peer"
-                />
-                <label
-                  htmlFor="write-content"
-                  className="flex items-center justify-center w-full p-6 border-2 border-gray-200 rounded-2xl cursor-pointer transition-all peer-checked:border-black peer-checked:bg-black/5 hover:border-gray-300"
-                >
-                  <div className="text-center">
-                    <div className="text-base font-medium text-gray-900 mb-1">
-                      Write Content & Generate PDF
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      AI generates content then creates PDF
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
-          </div>
-
           {/* Generate Button */}
           <div className="pt-8">
             <button
               onClick={handleGenerate}
-              className="group w-full px-8 py-5 bg-black text-white text-base font-medium rounded-full hover:bg-gray-800 transition-all flex items-center justify-center gap-2"
+              disabled={isLoading}
+              className="group w-full px-8 py-5 bg-black text-white text-base font-medium rounded-full hover:bg-gray-800 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {generationMode === "content"
-                ? "Write Content & Generate PDF"
-                : "Generate PDF Document"}
-              <ArrowRight
-                size={20}
-                className="group-hover:translate-x-1 transition-transform"
-              />
+              {isLoading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {useAI ? "Generating with AI..." : "Generating PDF..."}
+                </div>
+              ) : (
+                <>
+                  {useAI ? "Generate with AI" : "Generate PDF Document"}
+                  <ArrowRight
+                    size={20}
+                    className="group-hover:translate-x-1 transition-transform"
+                  />
+                </>
+              )}
             </button>
           </div>
         </div>
